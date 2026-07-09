@@ -1,0 +1,446 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum ArtworkStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  ARCHIVED
+}
+
+enum EditionType {
+  ORIGINAL
+  LIMITED
+  OPEN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum NotificationType {
+  ORDER_NEW
+  ORDER_SHIPPED
+  ORDER_DELIVERED
+  MESSAGE_NEW
+  REVIEW_NEW
+  ARTWORK_FEATURED
+  SHOP_APPROVED
+  SHOP_FEATURED
+  PAYOUT_SENT
+  COMMISSION_NEW
+  COMMISSION_ACCEPTED
+  COMMISSION_QUOTED
+  COMMISSION_REJECTED
+}
+
+enum CommissionStatus {
+  PENDING
+  ACCEPTED
+  QUOTED
+  REJECTED
+  PAID
+  COMPLETED
+  CANCELLED
+}
+
+enum FeaturedSlotType {
+  HOMEPAGE_BANNER
+  TRENDING
+  EDITORS_PICK
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  emailVerified    DateTime?
+  name             String?
+  password         String?
+  avatar           String?
+  role             Role      @default(BUYER)
+  isBanned         Boolean   @default(false)
+  stripeCustomerId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  shop                Shop?
+  orders              Order[]
+  wishlist            Wishlist[]
+  reviews             Review[]
+  addresses           Address[]
+  sentMessages        Message[]          @relation("SentMessages")
+  buyerConversations  Conversation[]     @relation("BuyerConversations")
+  sellerConversations Conversation[]     @relation("SellerConversations")
+  notifications       Notification[]
+  accounts            Account[]
+  sessions            Session[]
+  featuredSlots       FeaturedSlot[]
+  commissionRequests  CommissionRequest[]
+  following           Follow[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Shop {
+  id              String   @id @default(cuid())
+  ownerId         String   @unique
+  slug            String   @unique
+  displayName     String
+  bio             String?  @db.Text
+  bannerUrl       String?
+  logoUrl         String?
+  location        String?
+  websiteUrl      String?
+  instagramUrl    String?
+  isFeatured      Boolean  @default(false)
+  isApproved      Boolean  @default(false)
+  stripeAccountId String?
+  totalSales      Int      @default(0)
+  ratingAvg       Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner              User                @relation(fields: [ownerId], references: [id])
+  artworks           Artwork[]
+  orders             Order[]
+  reviews            Review[]
+  analytics          ShopAnalytics[]
+  featuredSlots      FeaturedSlot[]
+  commissionRequests CommissionRequest[]
+  followers          Follow[]
+}
+
+model Category {
+  id           String            @id @default(cuid())
+  name         String
+  slug         String            @unique
+  iconUrl      String?
+  parentId     String?
+  artworkCount Int               @default(0)
+  parent       Category?         @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[]        @relation("CategoryTree")
+  artworks     ArtworkCategory[]
+}
+
+model Medium {
+  id       String          @id @default(cuid())
+  name     String
+  slug     String          @unique
+  artworks ArtworkMedium[]
+}
+
+model Artwork {
+  id            String        @id @default(cuid())
+  shopId        String
+  sellerId      String
+  title         String
+  slug          String        @unique
+  description   String?       @db.Text
+  price         Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  status        ArtworkStatus @default(DRAFT)
+  isFeatured    Boolean       @default(false)
+  editionType   EditionType   @default(ORIGINAL)
+  editionCount  Int?
+  stockQuantity Int           @default(1)
+  weightKg      Float?
+  widthCm       Float?
+  heightCm      Float?
+  depthCm       Float?
+  yearCreated   Int?
+  tags          String[]
+  viewCount     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  shop          Shop              @relation(fields: [shopId], references: [id])
+  images        ArtworkImage[]
+  categories    ArtworkCategory[]
+  mediums       ArtworkMedium[]
+  orderItems    OrderItem[]
+  wishlist      Wishlist[]
+  featuredSlots FeaturedSlot[]
+}
+
+model ArtworkImage {
+  id                 String  @id @default(cuid())
+  artworkId          String
+  url                String
+  cloudinaryPublicId String?
+  isPrimary          Boolean @default(false)
+  displayOrder       Int     @default(0)
+  artwork            Artwork @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+}
+
+model ArtworkCategory {
+  artworkId  String
+  categoryId String
+  artwork    Artwork  @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@id([artworkId, categoryId])
+}
+
+model ArtworkMedium {
+  artworkId String
+  mediumId  String
+  artwork   Artwork @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+  medium    Medium  @relation(fields: [mediumId], references: [id])
+
+  @@id([artworkId, mediumId])
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  fullName   String
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  country    String
+  postalCode String
+  isDefault  Boolean @default(false)
+  user       User    @relation(fields: [userId], references: [id])
+  orders     Order[]
+}
+
+model Order {
+  id                    String      @id @default(cuid())
+  buyerId               String
+  shopId                String
+  status                OrderStatus @default(PENDING)
+  subtotal              Decimal     @db.Decimal(10, 2)
+  shippingCost          Decimal     @default(0) @db.Decimal(10, 2)
+  platformFeePercent    Decimal     @db.Decimal(5, 2)
+  sellerPayout          Decimal     @db.Decimal(10, 2)
+  stripePaymentIntentId String?
+  stripeTransferId      String?
+  shippingAddressId     String?
+  trackingNumber        String?
+  notes                 String?     @db.Text
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  buyer           User      @relation(fields: [buyerId], references: [id])
+  shop            Shop      @relation(fields: [shopId], references: [id])
+  shippingAddress Address?  @relation(fields: [shippingAddressId], references: [id])
+  items           OrderItem[]
+  review          Review?
+}
+
+model OrderItem {
+  id            String  @id @default(cuid())
+  orderId       String
+  artworkId     String
+  quantity      Int     @default(1)
+  unitPrice     Decimal @db.Decimal(10, 2)
+  snapshotTitle String
+  order         Order   @relation(fields: [orderId], references: [id])
+  artwork       Artwork @relation(fields: [artworkId], references: [id])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  buyerId   String
+  artworkId String
+  createdAt DateTime @default(now())
+  buyer     User     @relation(fields: [buyerId], references: [id])
+  artwork   Artwork  @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, artworkId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  buyerId    String
+  shopId     String
+  orderId    String   @unique
+  rating     Int
+  body       String?  @db.Text
+  photos     String[]
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  buyer      User     @relation(fields: [buyerId], references: [id])
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  buyerId       String
+  sellerId      String
+  artworkId     String?
+  lastMessageAt DateTime  @default(now())
+  buyer         User      @relation("BuyerConversations", fields: [buyerId], references: [id])
+  seller        User      @relation("SellerConversations", fields: [sellerId], references: [id])
+  messages      Message[]
+
+  @@unique([buyerId, sellerId, artworkId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String       @db.Text
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+model FeaturedSlot {
+  id          String           @id @default(cuid())
+  shopId      String?
+  artworkId   String?
+  slotType    FeaturedSlotType
+  startDate   DateTime
+  endDate     DateTime
+  createdById String
+  shop        Shop?            @relation(fields: [shopId], references: [id])
+  artwork     Artwork?         @relation(fields: [artworkId], references: [id])
+  createdBy   User             @relation(fields: [createdById], references: [id])
+}
+
+model ShopAnalytics {
+  id           String   @id @default(cuid())
+  shopId       String
+  date         DateTime @db.Date
+  views        Int      @default(0)
+  artworkViews Int      @default(0)
+  wishlistAdds Int      @default(0)
+  ordersCount  Int      @default(0)
+  revenue      Decimal  @default(0) @db.Decimal(10, 2)
+  shop         Shop     @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, date])
+}
+
+enum BlogCategory {
+  TECHNIQUE
+  ARTIST_INTERVIEW
+  ART_HISTORY
+  NEWS
+  INSPIRATION
+  GUIDE
+}
+
+model BlogPost {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  title       String
+  excerpt     String       @db.Text
+  content     String       @db.Text
+  coverImage  String
+  category    BlogCategory
+  tags        String[]
+  authorName  String
+  authorAvatar String?
+  readTime    Int          @default(5)
+  published   Boolean      @default(false)
+  viewCount   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Follow {
+  id        String   @id @default(cuid())
+  buyerId   String
+  shopId    String
+  createdAt DateTime @default(now())
+  buyer     User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, shopId])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model CommissionRequest {
+  id               String           @id @default(cuid())
+  buyerId          String
+  shopId           String
+  title            String
+  description      String           @db.Text
+  category         String?
+  budgetMin        Decimal?         @db.Decimal(10, 2)
+  budgetMax        Decimal?         @db.Decimal(10, 2)
+  deadline         DateTime?
+  widthCm          Float?
+  heightCm         Float?
+  referenceImages  String[]
+  status           CommissionStatus @default(PENDING)
+  artistNote       String?          @db.Text
+  quotedPrice      Decimal?         @db.Decimal(10, 2)
+  quotedDeadline   DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  buyer  User @relation(fields: [buyerId], references: [id])
+  shop   Shop @relation(fields: [shopId], references: [id])
+}
