@@ -70,7 +70,7 @@ export default async function SellerDashboardPage() {
     where: { shopId: shop.id },
     _count: { status: true },
   });
-  const countMap = Object.fromEntries(artworkCounts.map(r => [r.status, r._count.status]));
+  const countMap = Object.fromEntries(artworkCounts.map((r: (typeof artworkCounts)[number]) => [r.status, r._count.status]));
 
   // Total views
   const viewsResult = await prisma.artwork.aggregate({
